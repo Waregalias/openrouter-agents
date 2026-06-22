@@ -14,7 +14,9 @@ async function main() {
     return;
   }
 
-  const files = fs.readdirSync(agentsDir).filter(file => file.endsWith('.ts') || file.endsWith('.js'));
+  const files = fs.readdirSync(agentsDir).filter(file => 
+    (file.endsWith('.ts') || file.endsWith('.js')) && !file.endsWith('.d.ts')
+  );
 
   if (files.length === 0) {
     console.log("Aucun script trouvé dans le répertoire 'agents'.");

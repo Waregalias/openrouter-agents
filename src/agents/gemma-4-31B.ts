@@ -19,39 +19,47 @@ export const run = async () => {
         return;
     }
 
-    // Chemin du fichier à inclure
-    const filePath = path.join(__dirname, '../attachments/7e919c70-977c-4004-8b0d-779d079c6555.jpg');
-    const ext = path.extname(filePath).toLowerCase();
-    const isImage = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext);
-
-    let attachmentContent: any = null;
+    // Répertoire des pièces jointes spécifique à cet agent
+    const agentName = path.basename(__filename, '.ts');
+    const attachmentsDir = path.join(__dirname, '../attachments', agentName);
+    const attachmentItems: any[] = [];
 
     try {
-        if (fs.existsSync(filePath)) {
-            if (isImage) {
-                const fileBuffer = fs.readFileSync(filePath);
-                const base64 = fileBuffer.toString('base64');
-                const mimeType = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-                // Utilisation du type exact attendu par le SDK @openrouter/agent : NewUserMessageItem['content']
-                attachmentContent = {
-                    type: "input_image",
-                    imageUrl: `data:${mimeType};base64,${base64}`,
-                    detail: "auto"
-                };
-                console.log(`Image détectée : ${path.basename(filePath)}`);
-            } else {
-                const textContent = fs.readFileSync(filePath, 'utf-8');
-                attachmentContent = {
-                    type: "input_text",
-                    text: `Contenu du fichier ${path.basename(filePath)} :\n\n\`\`\`${ext.replace('.', '')}\n${textContent}\n\`\`\``
-                };
-                console.log(`Fichier texte détecté : ${path.basename(filePath)}`);
+        if (fs.existsSync(attachmentsDir)) {
+            const files = fs.readdirSync(attachmentsDir);
+            console.log(`Dossier de pièces jointes détecté : ${attachmentsDir} (${files.length} fichiers)`);
+
+            for (const filename of files) {
+                const filePath = path.join(attachmentsDir, filename);
+                if (fs.statSync(filePath).isDirectory()) continue;
+
+                const ext = path.extname(filename).toLowerCase();
+                const isImage = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext);
+
+                if (isImage) {
+                    const fileBuffer = fs.readFileSync(filePath);
+                    const base64 = fileBuffer.toString('base64');
+                    const mimeType = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+                    attachmentItems.push({
+                        type: "input_image",
+                        imageUrl: `data:${mimeType};base64,${base64}`,
+                        detail: "auto"
+                    });
+                    console.log(`  - Image ajoutée : ${filename}`);
+                } else if (['.json', '.txt', '.ts', '.js', '.md'].includes(ext)) {
+                    const textContent = fs.readFileSync(filePath, 'utf-8');
+                    attachmentItems.push({
+                        type: "input_text",
+                        text: `Contenu du fichier ${filename} :\n\n\`\`\`${ext.replace('.', '')}\n${textContent}\n\`\`\``
+                    });
+                    console.log(`  - Fichier texte ajouté : ${filename}`);
+                }
             }
         } else {
-            console.warn(`Note : Le fichier ${filePath} n'a pas été trouvé. L'agent sera lancé sans pièce jointe.`);
+            console.warn(`Note : Le répertoire ${attachmentsDir} n'a pas été trouvé. L'agent sera lancé sans pièces jointes.`);
         }
     } catch (err: any) {
-        console.error(`Erreur lors de la lecture du fichier : ${err.message}`);
+        console.error(`Erreur lors de la lecture des pièces jointes : ${err.message}`);
     }
 
     // Demander la question à l'utilisateur
@@ -59,8 +67,8 @@ export const run = async () => {
         {
             type: 'input',
             name: 'userQuestion',
-            message: 'Quelle est votre question sur ce contenu ?',
-            default: 'Peux-tu me faire une analyse détaillée de ce contenu ?',
+            message: 'Quelle est votre question sur ces documents ?',
+            default: 'Peux-tu me faire une synthèse de ces documents ?',
         },
     ]);
 
@@ -72,9 +80,7 @@ export const run = async () => {
     console.log("\nAppel de l'agent Gemma 4 31B via @openrouter/agent...");
 
     try {
-        // Construction de l'input dynamique. 
-        // D'après l'erreur Zod, l'API Responses attend soit une string, soit un tableau d'items spécifiques.
-        // On va passer directement le contenu sous forme de message utilisateur.
+        // Construction de l'input dynamique avec tous les fichiers
         const input: any = [
             {
                 role: "user",
@@ -83,7 +89,7 @@ export const run = async () => {
                         type: "input_text",
                         text: userQuestion
                     },
-                    ...(attachmentContent ? [attachmentContent] : [])
+                    ...attachmentItems
                 ]
             }
         ];
@@ -102,6 +108,23 @@ export const run = async () => {
         console.log(responseText);
         console.log("\n------------------");
     } catch (error: any) {
-        console.error("Erreur lors de l'appel à OpenRouter :", error.message);
+        console.error("\nErreur lors de l'appel à OpenRouter :");
+        
+        // Tentative d'affichage détaillé de l'erreur (notamment pour le rate-limit 429)
+        if (error.error) {
+            const details = error.error;
+            console.error(`Code : ${details.code}`);
+            console.error(`Message : ${details.message}`);
+            if (details.metadata && details.metadata.raw) {
+                console.error(`Détails du fournisseur : ${details.metadata.raw}`);
+            }
+        } else {
+            console.error(error.message);
+        }
+        
+        // Affichage de l'objet complet en cas de besoin pour le debug
+        if (process.env.DEBUG) {
+            console.error(JSON.stringify(error, null, 2));
+        }
     }
 };
