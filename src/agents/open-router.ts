@@ -4,6 +4,7 @@ import path from 'path';
 import {fileURLToPath} from 'url';
 import inquirer from 'inquirer';
 import {prepareAgentInput} from '../utils/agent-utils.js';
+import {compressContent} from '../utils/headroom.js';
 
 dotenv.config();
 
@@ -52,6 +53,9 @@ export const run = async () => {
     const agentName = path.basename(__filename, '.ts');
     const content = await prepareAgentInput(agentName, __dirname);
 
+    // 3. Compression du contexte via Headroom (économie de tokens, optionnel)
+    const compressedContent = await compressContent(content, selectedModel);
+
     // Initialisation du client OpenRouter
     const client = new OpenRouter({
         apiKey: apiKey,
@@ -63,7 +67,7 @@ export const run = async () => {
         const input: any = [
             {
                 role: "user",
-                content: content
+                content: compressedContent
             }
         ];
 
