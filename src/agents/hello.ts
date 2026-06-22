@@ -1,0 +1,1 @@
+export const run = () => console.log("Hello depuis le script hello !");
