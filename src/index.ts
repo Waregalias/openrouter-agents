@@ -27,7 +27,7 @@ async function main() {
     {
       type: 'select',
       name: 'selectedScript',
-      message: 'Quel script souhaitez-vous lancer ?',
+      message: 'Quel agent souhaitez-vous lancer ?',
       choices: files,
     },
   ]);
